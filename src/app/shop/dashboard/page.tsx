@@ -205,7 +205,7 @@ export default function ShopDashboard() {
     )
   }
 
-  const pendingCount = orders.filter(o => o.status === 'pending_payment').length
+  const pendingCount = orders.filter(o => o.status === 'pending_payment' || o.status === 'payment_verified').length
   const completedCount = orders.filter(o => o.status === 'completed').length
   const doneCount = orders.filter(o => o.status === 'done').length
   return (
@@ -340,7 +340,7 @@ export default function ShopDashboard() {
                     <Download className="w-5 h-5" />
                   </button>
 
-                  {order.status === 'pending_payment' ? (
+                  {order.status === 'pending_payment' || order.status === 'payment_verified' ? (
                     <button 
                       onClick={() => handleUpdateStatus(order.id, 'printing')}
                       className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold text-sm hover:bg-blue-700 shadow-lg shadow-blue-600/20 transition flex items-center gap-2">

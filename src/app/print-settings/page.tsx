@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Printer, ChevronDown } from 'lucide-react'
+import UpiQr from '@/components/UpiQr'
 import { createClient } from '@/utils/supabase/client'
 
 interface PrintSettings {
@@ -74,13 +75,35 @@ export default function PrintSettingsPage() {
     setProcessing(true)
 
     try {
-      // Redirect to payment with all parameters
+      // Calculate total amount
+      const basePrice = settings.color === 'bw' ? shopData?.bw_price || 0 : shopData?.color_price || 0
+      const totalPrice = basePrice * settings.copies
+      const bindingPrice = settings.binding === 'staple' ? 5 : settings.binding === 'spiral' ? 25 : 0
+      const totalAmount = totalPrice + bindingPrice
+
+      // Create payment record
+      const paymentResponse = await fetch('/api/payments/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uploadId,
+          amount: totalAmount,
+        }),
+      })
+
+      const paymentData = await paymentResponse.json()
+
+      if (!paymentResponse.ok || !paymentData.txnid) {
+        throw new Error('Failed to create payment record')
+      }
+
+      // Redirect to success/verification page with txnid
       router.push(
-        `/payment?uploadId=${uploadId}&shopId=${shopId}&printColor=${settings.color}&printSides=${settings.sides}&printCopies=${settings.copies}&printBinding=${settings.binding}`
+        `/success?uploadId=${uploadId}&shopId=${shopId}&txnid=${paymentData.txnid}&printColor=${settings.color}&printSides=${settings.sides}&printCopies=${settings.copies}&printBinding=${settings.binding}`
       )
     } catch (err) {
       console.error('Error continuing to payment:', err)
-      alert('Failed to continue to payment. Please try again.')
+      alert('Failed to proceed. Please try again.')
     } finally {
       setProcessing(false)
     }
@@ -318,6 +341,22 @@ export default function PrintSettingsPage() {
             <div className="flex justify-between text-lg font-bold text-slate-900 pt-4 border-t border-slate-200">
               <span>Total Estimated Cost</span>
               <span className="text-blue-600">₹{estimatedTotal}</span>
+            </div>
+          </div>
+
+          {/* UPI QR Code Option */}
+          <div className="mb-8 pb-8 border-b border-slate-200">
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">Payment Options</h3>
+            <div className="p-6 bg-blue-50 rounded-xl border border-blue-200">
+              <p className="text-sm text-slate-600 mb-4">
+                Scan this QR code with any UPI app to pay directly:
+              </p>
+              <div className="flex justify-center mb-4">
+                <UpiQr amount={estimatedTotal} />
+              </div>
+              <p className="text-xs text-center text-slate-600">
+                Or proceed to next step to use PayU gateway
+              </p>
             </div>
           </div>
 
