@@ -235,6 +235,36 @@ export default function PrintSettingsPage() {
       router.push(`/payment?${params.toString()}`)
     } catch (err) {
       toast.error('Failed to proceed')
+      // Calculate total amount
+      const basePrice = settings.color === 'bw' ? shopData?.bw_price || 0 : shopData?.color_price || 0
+      const totalPrice = basePrice * settings.copies
+      const bindingPrice = settings.binding === 'staple' ? 5 : settings.binding === 'spiral' ? 25 : 0
+      const totalAmount = totalPrice + bindingPrice
+
+      // Create payment record
+      const paymentResponse = await fetch('/api/payments/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uploadId,
+          amount: totalAmount,
+        }),
+      })
+
+      const paymentData = await paymentResponse.json()
+
+      if (!paymentResponse.ok || !paymentData.txnid) {
+        throw new Error('Failed to create payment record')
+      }
+
+      // Redirect to success/verification page with txnid
+      router.push(
+        `/success?uploadId=${uploadId}&shopId=${shopId}&txnid=${paymentData.txnid}&printColor=${settings.color}&printSides=${settings.sides}&printCopies=${settings.copies}&printBinding=${settings.binding}`
+      )
+    } catch (err) {
+      console.error('Error continuing to payment:', err)
+      alert('Failed to proceed. Please try again.')
+    } finally {
       setProcessing(false)
     }
   }
