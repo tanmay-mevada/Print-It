@@ -10,7 +10,6 @@ import {
   Server, 
   Database, 
   Lock,
-  ArrowRight,
   Printer
 } from "lucide-react";
 import Link from "next/link";
@@ -64,7 +63,7 @@ export default function Home() {
             transition={{ duration: 0.7 }}
             className="text-5xl md:text-7xl font-bold tracking-tight text-slate-900 mb-6"
           >
-            Don't Wait. <br />
+            Don&apos;t Wait. <br />
             Just <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Printify.</span>
           </motion.h1>
 
@@ -101,7 +100,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Why we built this?</h2>
-            <p className="text-slate-500 text-lg">Because WhatsApping files to "Raju Xerox" is painful.</p>
+            <p className="text-slate-500 text-lg">Because WhatsApping files to &quot;Raju Xerox&quot; is painful.</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8">
@@ -119,7 +118,7 @@ export default function Home() {
                   <span className="text-red-500 font-bold">✕</span> Wait in a 20-minute queue.
                 </li>
                 <li className="flex items-start gap-3">
-                  <span className="text-red-500 font-bold">✕</span> "Bhaiya, file bheji dekho?" (WhatsApp).
+                  <span className="text-red-500 font-bold">✕</span> &quot;Bhaiya, file bheji dekho?&quot; (WhatsApp).
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="text-red-500 font-bold">✕</span> Hunting for ₹2 change.
