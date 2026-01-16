@@ -6,7 +6,7 @@ import { signup } from '@/app/auth/actions'
 export default function SignupPage() {
   // state contains the return value from your action (e.g., error messages)
   // isPending tells you if the form is currently submitting
-  const [state, action, isPending] = useActionState(signup, { error: null, success: false })
+  const [state, action, isPending] = useActionState(signup, { error: null as string | null, success: false })
 
   return (
     <form action={action} className="flex flex-col gap-4 p-4 max-w-md mx-auto">
