@@ -135,15 +135,10 @@ export default function Dashboard() {
         return
       }
 
+      // After successful upload, redirect user to Print Settings step
+      // passing uploadId and shopId as query params.
       setFile(null)
-      setUploadSuccess(true)
-      // Refresh orders
-      const { data: userOrders } = await supabase
-        .from('uploads')
-        .select('id, file_name, file_size, status, created_at')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false })
-      setOrders(userOrders || [])
+      router.push(`/print-settings?uploadId=${data.uploadId}&shopId=${selectedShop.id}`)
 
     } catch (err) {
       setUploadError('Failed to upload file. Please try again.')
@@ -326,7 +321,7 @@ export default function Dashboard() {
               {uploadSuccess && (
                 <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
                   <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                  <p className="text-green-700 text-sm">Upload successful! Your order has been placed and is now visible in your recent orders.</p>
+                  <p className="text-green-700 text-sm">Upload successful! Continue to print settings to configure your order.</p>
                 </div>
               )}
 
@@ -336,7 +331,7 @@ export default function Dashboard() {
                 disabled={!file || !selectedShop || uploading}
                 className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-lg transition shadow-lg shadow-blue-600/20"
               >
-                {uploading ? 'Uploading...' : 'Upload & Place Order'}
+                {uploading ? 'Uploading...' : 'Next: Print Settings'}
               </button>
             </div>
           </div>
