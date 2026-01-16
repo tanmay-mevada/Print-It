@@ -36,7 +36,8 @@ export async function POST(request: NextRequest) {
 
     const buffer = await file.arrayBuffer()
     const timestamp = Date.now()
-    const fileName = `${timestamp}-${file.name}`
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+    const fileName = `${timestamp}-${sanitizedFileName}`
     const filePath = `${user.id}/${fileName}`
 
     // Upload to Supabase Storage
