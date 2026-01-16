@@ -161,9 +161,9 @@ export default function Dashboard() {
     setSelectedShop(shop)
   }
 
-  const handleProceedToPayment = () => {
+  const handleProceedToPrintSettings = () => {
     if (!selectedShop || !uploadId) return
-    router.push(`/payment?uploadId=${uploadId}&shopId=${selectedShop.id}`)
+    router.push(`/print-settings?uploadId=${uploadId}&shopId=${selectedShop.id}`)
   }
 
   const resetUpload = () => {
@@ -340,7 +340,7 @@ export default function Dashboard() {
 
             {selectedShop && (
               <button
-                onClick={handleProceedToPayment}
+                onClick={handleProceedToPrintSettings}
                 className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition shadow-lg shadow-blue-600/20"
               >
                 Proceed to Payment
