@@ -7,7 +7,7 @@ type UpiQrProps = {
   name?: string
 }
 
-export default function UpiQr({ amount, upiId = "aumghodasara15@okhdfcbank", name = "Print Link Admin" }: UpiQrProps) {
+export default function UpiQr({ amount, upiId = "tanmaymevada24@oksbi", name = "Print Link Admin" }: UpiQrProps) {
   // If amount is provided, format to two decimals
   const amountStr = amount !== undefined && amount !== null ? Number(amount).toFixed(2) : undefined
 
