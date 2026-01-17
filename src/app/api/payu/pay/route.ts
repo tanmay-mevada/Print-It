@@ -63,9 +63,20 @@ export async function POST(request: Request) {
 
     // If no valid credentials or demo mode enabled, use demo/test flow
     if (!key || !salt || USE_DEMO_MODE) {
-      // In demo mode, redirect to success page
-      // The success page will check if payment exists (it was just created above with 'pending' status)
-      // User must scan UPI QR or manually confirm payment
+      // In demo mode, mark payment as successful in the database
+      const { error: updateError } = await supabase
+        .from('payments')
+        .update({
+          status: 'success',
+          verified_at: new Date().toISOString(),
+        })
+        .eq('txnid', txnid)
+
+      if (updateError) {
+        console.error('Error updating payment status:', updateError)
+      }
+
+      // Redirect to success page
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
       const successUrl = new URL('/success', siteUrl)
       successUrl.searchParams.set('uploadId', uploadId)

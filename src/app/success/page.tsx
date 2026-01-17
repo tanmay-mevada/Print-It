@@ -21,7 +21,7 @@ export default function PaymentSuccessPage() {
   useEffect(() => {
     const verifyPayment = async () => {
       try {
-        if (!uploadId || !shopId) {
+        if (!uploadId || !shopId || !txnid) {
           setStatus('error')
           setMessage('Invalid payment information. Please try again.')
           return
@@ -42,7 +42,21 @@ export default function PaymentSuccessPage() {
 
         setOrderDetails(upload)
 
-        // Update order status to 'payment_verified' (payment confirmed)
+        // Verify payment record exists and is successful
+        const { data: payment, error: paymentError } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('txnid', txnid)
+          .eq('status', 'success')
+          .single()
+
+        if (paymentError || !payment) {
+          setStatus('error')
+          setMessage('Payment record not found or payment failed. Please contact support.')
+          return
+        }
+
+        // Payment verified! Now update order status
         const { error: updateError } = await supabase
           .from('uploads')
           .update({
@@ -68,7 +82,7 @@ export default function PaymentSuccessPage() {
     }
 
     verifyPayment()
-  }, [uploadId, shopId, supabase])
+  }, [uploadId, shopId, txnid, supabase])
 
   const handleRedirect = () => {
     router.push('/dashboard')
