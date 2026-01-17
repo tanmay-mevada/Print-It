@@ -1,83 +1,85 @@
+import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const code = searchParams.get('code')
+export async function GET(request: Request) {
+  const requestUrl = new URL(request.url)
+  const code = requestUrl.searchParams.get('code')
+  
+  // Use the origin from the request to ensure we redirect to the correct domain
+  // (e.g., https://print-it.vercel.app or http://localhost:3000)
+  const origin = requestUrl.origin
 
   if (code) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
-    
+
     if (error) {
-      return NextResponse.redirect(new URL('/signup?error=auth_failed', request.url))
+      console.error('Auth Exchange Error:', error)
+      return NextResponse.redirect(`${origin}/login?error=auth_failed`)
     }
 
-    // Get the authenticated user
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-    return new Response("Unauthorized", { status: 401 });
-    }
 
     if (user) {
-      // Check if user already exists in the users table
-      const { data: existingUser } = await supabase
+      // 1. Fetch existing profile from public table
+      const { data: existingProfile } = await supabase
         .from('users')
-        .select('id')
+        .select('*')
         .eq('id', user.id)
         .single()
 
-      // If user doesn't exist in users table, create them
-      if (!existingUser) {
-        const { error: insertError } = await supabase
+      let profile = existingProfile
+
+      // 2. If no profile exists (First time Google Login), create it
+      if (!existingProfile) {
+        const defaultRole = 'student' // Default role for Google Sign-ups
+        const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'
+
+        const { data: newProfile, error: insertError } = await supabase
           .from('users')
           .insert({
             id: user.id,
             email: user.email,
-            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-            phone: user.user_metadata?.phone || null,
-            role: user.user_metadata?.role || 'student',
+            full_name: fullName,
+            role: defaultRole,
+            phone: null, // Google doesn't provide phone
             created_at: new Date().toISOString(),
           })
+          .select()
+          .single()
 
         if (insertError) {
-          console.error('Error creating user profile:', insertError)
-          return NextResponse.redirect(new URL('/signup?error=profile_creation_failed', request.url))
+          console.error('Profile Creation Error:', insertError)
+          return NextResponse.redirect(`${origin}/login?error=profile_creation_failed`)
         }
-      }
-    }
-
-    // Check user role and redirect accordingly
-    const userRole = user?.user_metadata?.role
-    
-    if (userRole === 'shopkeeper') {
-      // Check if shopkeeper has shop setup
-      const { data: shop } = await supabase
-        .from('shops')
-        .select('id')
-        .eq('owner_id', user.id)
-        .single()
-
-      if (!shop) {
-        return NextResponse.redirect(new URL('/shop/setup', request.url))
+        
+        // Update the local variable so subsequent checks work
+        profile = newProfile
       }
 
-      return NextResponse.redirect(new URL('/shop/dashboard', request.url))
-    }
+      // 3. Routing Logic based on Database Profile
+      if (profile?.role === 'shopkeeper') {
+        const { data: shop } = await supabase
+          .from('shops')
+          .select('id')
+          .eq('owner_id', user.id)
+          .single()
 
-    // For students, check if profile is complete
-    if (userRole === 'student' || userRole === null) {
-      const { data: userProfile } = await supabase
-        .from('users')
-        .select('phone')
-        .eq('id', user.id)
-        .single()
+        // If shopkeeper hasn't set up shop, send to setup
+        if (!shop) {
+          return NextResponse.redirect(`${origin}/shop/setup`)
+        }
+        return NextResponse.redirect(`${origin}/shop/dashboard`)
+      }
 
-      if (!userProfile?.phone) {
-        return NextResponse.redirect(new URL('/user/setup', request.url))
+      // Student Routing
+      // If phone number is missing (common for Google Auth), force setup
+      if (!profile?.phone) {
+        return NextResponse.redirect(`${origin}/user/setup`)
       }
     }
   }
 
-  return NextResponse.redirect(new URL('/dashboard', request.url))
+  // Default redirect for complete profiles
+  return NextResponse.redirect(`${origin}/dashboard`)
 }

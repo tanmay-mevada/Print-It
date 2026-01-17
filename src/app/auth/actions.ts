@@ -13,7 +13,8 @@ export async function signup(prevState: unknown, formData: FormData) {
   const phone = formData.get('phone') as string;
   const role = formData.get('role') as string;
 
-  const { error } = await supabase.auth.signUp({
+  // 1. Sign up the user in Auth
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -28,9 +29,34 @@ export async function signup(prevState: unknown, formData: FormData) {
   if (error) {
     return { error: error.message, success: false };
   }
+
+  // 2. Create the Public Profile immediately
+  // This ensures the database trigger doesn't fail or lag, and data is consistent
+  if (data.user) {
+    const { error: profileError } = await supabase
+      .from('users')
+      .insert({
+        id: data.user.id,
+        email: email,
+        full_name: full_name,
+        phone: phone,
+        role: role,
+      });
+
+    if (profileError) {
+      console.error("Profile creation failed:", profileError);
+      // We don't stop the flow here, but logging is critical
+    }
+  }
   
   revalidatePath('/', 'layout');
-  redirect('/dashboard');
+  
+  // 3. Smart Redirect based on Role
+  if (role === 'shopkeeper') {
+    redirect('/shop/setup');
+  } else {
+    redirect('/dashboard');
+  }
 }
 
 // --- LOGIN ACTION ---
@@ -49,46 +75,43 @@ export async function login(prevState: unknown, formData: FormData) {
     return { error: error.message }
   }
 
-  // Get user role
+  // Get user role from the PUBLIC table (more reliable than metadata)
   const { data: { user } } = await supabase.auth.getUser()
-  const userRole = user?.user_metadata?.role
+  
+  if (!user) return { error: "User not found" }
 
-  // If shopkeeper, check if they have a shop setup
+  const { data: profile } = await supabase
+    .from('users')
+    .select('role, phone')
+    .eq('id', user.id)
+    .single()
+
+  const userRole = profile?.role || user.user_metadata?.role
+
+  // Shopkeeper Logic
   if (userRole === 'shopkeeper') {
     const { data: shop } = await supabase
       .from('shops')
       .select('id')
-      .eq('owner_id', user?.id)
+      .eq('owner_id', user.id)
       .single()
 
     if (!shop) {
-      // Redirect to shop setup if no shop exists
-      revalidatePath('/', 'layout')
       redirect('/shop/setup')
     }
-
-    // Shop exists, go to shop dashboard
-    revalidatePath('/', 'layout')
     redirect('/shop/dashboard')
   }
 
-  // For students, check if they have completed their profile
-  if (userRole === 'student' || userRole === null) {
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('phone')
-      .eq('id', user?.id)
-      .single()
-
-    if (!userProfile?.phone) {
-      // Redirect to user setup if phone not filled
-      revalidatePath('/', 'layout')
+  // Student Logic
+  if (userRole === 'student') {
+    // If phone is missing in public profile, force setup
+    if (!profile?.phone) {
       redirect('/user/setup')
     }
+    redirect('/dashboard')
   }
 
-  // For students with completed profile, go to dashboard
-  revalidatePath('/', 'layout')
+  // Fallback
   redirect('/dashboard')
 }
 
@@ -105,14 +128,24 @@ export async function logout() {
 export async function signInWithGoogle() {
   const supabase = await createClient()
   
+  // Dynamic Origin Logic
+  // This prevents the issue where it redirects to "localhost" on production
+  const origin = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+  
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+      // Crucial: Redirect to your callback route, not just the home page
+      redirectTo: `${origin}/auth/callback`,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'consent',
+      },
     },
   })
   
   if (error) {
+    console.error("Google Sign-in Error:", error)
     return { error: error.message }
   }
   
@@ -133,13 +166,14 @@ export async function setupShop(prevState: unknown, formData: FormData) {
 
   const name = formData.get('name') as string
   const location = formData.get('location') as string
-  const bw_price = parseFloat(formData.get('bw_price') as string)
-  const color_price = parseFloat(formData.get('color_price') as string)
-  const spiral_price = parseFloat(formData.get('spiral_price') as string)
-  const lamination_price = parseFloat(formData.get('lamination_price') as string)
+  // Ensure we parse floats correctly, default to 0 if NaN
+  const bw_price = parseFloat(formData.get('bw_price') as string) || 0
+  const color_price = parseFloat(formData.get('color_price') as string) || 0
+  const spiral_price = parseFloat(formData.get('spiral_price') as string) || 0
+  const lamination_price = parseFloat(formData.get('lamination_price') as string) || 0
 
-  if (!name || !location || !bw_price || !color_price || !spiral_price || !lamination_price) {
-    return { error: 'All fields are required', success: false }
+  if (!name || !location) {
+    return { error: 'Name and Location are required', success: false }
   }
 
   const { error } = await supabase.from('shops').insert({
@@ -150,6 +184,7 @@ export async function setupShop(prevState: unknown, formData: FormData) {
     color_price,
     spiral_price,
     lamination_price,
+    is_open: true // Default to open
   })
 
   if (error) {
@@ -177,13 +212,17 @@ export async function setupUserProfile(prevState: unknown, formData: FormData) {
     return { error: 'All fields are required', success: false }
   }
 
+  // Upsert allows updating if exists, inserting if not (safest for OAuth flows)
   const { error } = await supabase
     .from('users')
-    .update({
+    .upsert({
+      id: user.id,
+      email: user.email,
       full_name,
       phone,
+      role: 'student', // Enforce role
+      updated_at: new Date().toISOString(),
     })
-    .eq('id', user.id)
 
   if (error) {
     return { error: error.message, success: false }
