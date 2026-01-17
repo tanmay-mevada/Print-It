@@ -7,20 +7,18 @@ import { Toaster, toast } from 'sonner'
 import {
   Printer,
   CheckCircle,
-  Clock,
-  IndianRupee,
-  FileText,
-  Download,
-  Eye,
   ShieldCheck,
   Loader2,
   Power,
   Store,
   MapPin,
+  IndianRupee,
+  FileText,
+  Download,
+  Eye,
   Scroll,
   Layers
 } from 'lucide-react'
-import LogoutButton from '@/components/logout-button'
 
 // 1. Interfaces
 interface Order {
@@ -65,7 +63,6 @@ export default function ShopDashboard() {
 
   // --- AUDIO SETUP ---
   useEffect(() => {
-    // Ensure you have a file named 'notification.mp3' in your public folder
     audioRef.current = new Audio('/notification.mp3')
   }, [])
 
@@ -82,7 +79,6 @@ export default function ShopDashboard() {
     const originalStatus = shopData.is_open
 
     try {
-      // Optimistic Update
       setShopData(prev => prev ? { ...prev, is_open: !prev.is_open } : null)
       
       const { error } = await supabase
@@ -110,11 +106,9 @@ export default function ShopDashboard() {
         const { data: { user: authUser } } = await supabase.auth.getUser()
         if (!authUser) { router.push('/login'); return }
 
-        // Role Check
         const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single()
         if (profile?.role !== 'shopkeeper') { router.push('/dashboard'); return }
 
-        // Fetch Shop (With new schema fields)
         const { data: shop } = await supabase
           .from('shops')
           .select('*')
@@ -125,10 +119,12 @@ export default function ShopDashboard() {
 
         if (shop) {
           setLoadingOrders(true)
+          // EXCLUDE unpaid orders, keep everything else
           const { data: shopOrders } = await supabase
             .from('uploads')
             .select('*')
             .eq('shop_id', shop.id)
+            .neq('status', 'pending_payment') 
             .order('created_at', { ascending: false })
             .limit(50)
 
@@ -160,22 +156,32 @@ export default function ShopDashboard() {
           filter: `shop_id=eq.${shopData.id}`
         },
         (payload) => {
+          // INSERT Event
           if (payload.eventType === 'INSERT') {
-            // 1. Play Sound
-            playSound()
-            // 2. Show Toast
-            toast.message('New Order Received!', {
-              description: 'A student just uploaded a file.',
-            })
-            // 3. Update State
-            setOrders((prev) => [payload.new as Order, ...prev])
+            const newOrder = payload.new as Order
+            if (newOrder.status !== 'pending_payment') {
+               playSound()
+               toast.message('New Order Received!', { description: 'A student just paid for a file.' })
+               setOrders((prev) => [newOrder, ...prev])
+            }
           } 
+          // UPDATE Event
           else if (payload.eventType === 'UPDATE') {
-            setOrders((prev) => 
-              prev.map((order) => 
-                order.id === payload.new.id ? { ...order, ...payload.new } : order
-              )
-            )
+            const updatedOrder = payload.new as Order
+            
+            // If just paid
+            if (payload.old.status === 'pending_payment' && updatedOrder.status !== 'pending_payment') {
+                playSound()
+                toast.message('New Order Received!', { description: 'Payment confirmed.' })
+                setOrders((prev) => [updatedOrder, ...prev])
+            } 
+            else {
+                setOrders((prev) => 
+                  prev.map((order) => 
+                    order.id === updatedOrder.id ? { ...order, ...updatedOrder } : order
+                  )
+                )
+            }
           }
         }
       )
@@ -195,15 +201,14 @@ export default function ShopDashboard() {
       })
 
       if (!response.ok) throw new Error()
-      const data = await response.json()
-      window.open(data.url, '_blank')
+      const resData = await response.json()
+      window.open(resData.url, '_blank')
     } catch {
       toast.error(`Failed to ${intent} file`)
     }
   }
 
   const handleUpdateStatus = async (uploadId: string, status: 'printing' | 'completed') => {
-    // Optimistic
     setOrders(prev => prev.map(o => o.id === uploadId ? { ...o, status } : o))
     
     try {
@@ -216,7 +221,6 @@ export default function ShopDashboard() {
       toast.success(`Order marked as ${status}`)
     } catch {
       toast.error('Failed to update status on server')
-      // Revert if needed (omitted for brevity)
     }
   }
 
@@ -236,13 +240,11 @@ export default function ShopDashboard() {
       const data = await response.json()
 
       if (!response.ok) {
-        // Handle Invalid OTP gracefully
         toast.error(data.error || 'Invalid OTP. Please try again.')
-        setOtp('') // Clear input on error
+        setOtp('')
         return
       }
 
-      // Success
       setOrders(prev => prev.map(o => o.id === selectedOrder ? { ...o, status: 'done' } : o))
       setShowOtpModal(false)
       setSelectedOrder(null)
@@ -262,7 +264,8 @@ export default function ShopDashboard() {
     )
   }
 
-  const pendingCount = orders.filter(o => o.status === 'pending_payment' || o.status === 'pending').length
+  // UPDATED COUNTS: Group 'printing' and 'payment_verified' together as "To Print"
+  const pendingCount = orders.filter(o => o.status === 'printing' || o.status === 'payment_verified').length
   const completedCount = orders.filter(o => o.status === 'completed').length
   const doneCount = orders.filter(o => o.status === 'done').length
 
@@ -270,8 +273,7 @@ export default function ShopDashboard() {
     <div className="min-h-screen bg-slate-50 pb-20">
       <Toaster position="top-right" richColors />
 
-      {/* --- HEADER --- */}
-      <header className="bg-white sticky top-0 z-30 h-16">
+      <header className="bg-white sticky top-0 z-30 h-16 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Store className="w-6 h-6 text-blue-600" />
@@ -285,7 +287,7 @@ export default function ShopDashboard() {
         {/* --- 1. TOP SECTION: METRICS & CONTROLS --- */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-8">
             
-            {/* Toggle Card (Prominent) */}
+            {/* Toggle Card */}
             <div className={`p-6 rounded-2xl border flex flex-col justify-between shadow-sm transition-colors ${
               shopData?.is_open 
               ? 'bg-green-50 border-green-200' 
@@ -317,19 +319,19 @@ export default function ShopDashboard() {
 
             {/* Metrics Cards */}
             <StatCard
-              title="Pending"
+              title="To Print"
               value={pendingCount.toString()}
-              icon={<Clock className="w-5 h-5 text-orange-600" />}
+              icon={<Printer className="w-5 h-5 text-blue-600" />}
               bg="bg-white"
             />
             <StatCard
-              title="Ready to Pickup"
+              title="Ready for Pickup"
               value={completedCount.toString()}
               icon={<CheckCircle className="w-5 h-5 text-purple-600" />}
               bg="bg-white"
             />
             <StatCard
-              title="Total Done"
+              title="Total Completed"
               value={doneCount.toString()}
               icon={<ShieldCheck className="w-5 h-5 text-green-600" />}
               bg="bg-white"
@@ -339,77 +341,77 @@ export default function ShopDashboard() {
         {/* --- 2. MIDDLE SECTION: LIVE ORDERS --- */}
         <div className="mb-12">
           <div className="flex items-center gap-3 mb-4">
-             <h2 className="text-xl font-bold text-slate-900">Live Queue</h2>
-             {loadingOrders && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+              <h2 className="text-xl font-bold text-slate-900">Live Queue</h2>
+              {loadingOrders && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
           </div>
 
           {orders.length === 0 ? (
              <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300">
                 <Printer className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 font-medium">No active orders right now.</p>
-                <p className="text-slate-400 text-sm">New orders will appear here automatically.</p>
+                <p className="text-slate-500 font-medium">No pending print jobs.</p>
+                <p className="text-slate-400 text-sm">New paid orders will appear here automatically.</p>
              </div>
           ) : (
             <div className="space-y-3">
-              {orders.map((order) => (
-                <div key={order.id} className={`bg-white rounded-xl border p-4 flex flex-col md:flex-row items-center gap-4 transition-all hover:shadow-md ${
-                  order.status === 'pending_payment' ? 'border-blue-300 shadow-blue-100 shadow-sm' : 'border-slate-200'
-                }`}>
-                  {/* Icon & ID */}
-                  <div className="flex items-center gap-4 w-full md:w-auto">
-                    <div className={`p-3 rounded-lg ${order.file_name.endsWith('.pdf') ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
-                      <FileText className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400 font-mono">#{order.id.substring(0,6)}</p>
-                      <h3 className="font-bold text-slate-900 truncate max-w-[200px]" title={order.file_name}>
-                        {order.file_name}
-                      </h3>
-                      <p className="text-xs text-slate-500">{(order.file_size / 1024 / 1024).toFixed(2)} MB • {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                    </div>
-                  </div>
+              {orders.map((order) => {
+                // Helper to check if order is in "To Print" state
+                const isReadyToPrint = order.status === 'printing' || order.status === 'payment_verified';
 
-                  {/* Spacer */}
-                  <div className="flex-1"></div>
-
-                  {/* Status Badge */}
-                  <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
-                     order.status === 'done' ? 'bg-slate-100 text-slate-600 border-slate-200' :
-                     order.status === 'completed' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                     order.status === 'printing' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                     'bg-orange-50 text-orange-700 border-orange-200 animate-pulse'
-                  }`}>
-                    {order.status.replace('_', ' ')}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 w-full md:w-auto justify-end border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
-                    <button onClick={() => handleRequest(order.id, 'view')} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600" title="View"><Eye className="w-5 h-5"/></button>
-                    <button onClick={() => handleRequest(order.id, 'download')} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600" title="Download"><Download className="w-5 h-5"/></button>
+                return (
+                  <div key={order.id} className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col md:flex-row items-center gap-4 transition-all hover:shadow-md">
                     
-                    <div className="w-px h-6 bg-slate-200 mx-1 hidden md:block"></div>
+                    {/* Icon & ID */}
+                    <div className="flex items-center gap-4 w-full md:w-auto">
+                      <div className={`p-3 rounded-lg ${order.file_name.endsWith('.pdf') ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                        <FileText className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400 font-mono">#{order.id.substring(0,6)}</p>
+                        <h3 className="font-bold text-slate-900 truncate max-w-[200px]" title={order.file_name}>
+                          {order.file_name}
+                        </h3>
+                        <p className="text-xs text-slate-500">{(order.file_size / 1024 / 1024).toFixed(2)} MB • {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                      </div>
+                    </div>
 
-                    {/* Logic for Action Buttons */}
-                    {order.status === 'pending_payment' || order.status === 'pending' ? (
-                      <button onClick={() => handleUpdateStatus(order.id, 'printing')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
-                        <Printer className="w-4 h-4" /> Print
-                      </button>
-                    ) : order.status === 'printing' ? (
-                      <button onClick={() => handleUpdateStatus(order.id, 'completed')} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
-                        <CheckCircle className="w-4 h-4" /> Ready
-                      </button>
-                    ) : order.status === 'completed' ? (
-                      <button onClick={() => { setSelectedOrder(order.id); setShowOtpModal(true); }} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4" /> Verify
-                      </button>
-                    ) : (
-                      <button disabled className="bg-slate-100 text-slate-400 px-4 py-2 rounded-lg text-sm font-bold cursor-not-allowed">
-                        Completed
-                      </button>
-                    )}
+                    <div className="flex-1"></div>
+
+                    {/* Status Badge */}
+                    <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
+                       order.status === 'done' ? 'bg-slate-100 text-slate-600 border-slate-200' :
+                       order.status === 'completed' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                       // Matches both 'printing' and 'payment_verified'
+                       isReadyToPrint ? 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse' :
+                       'bg-gray-100 text-gray-500'
+                    }`}>
+                      {isReadyToPrint ? 'Payment Verified' : order.status.replace('_', ' ')}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 w-full md:w-auto justify-end border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
+                      <button onClick={() => handleRequest(order.id, 'view')} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600" title="View"><Eye className="w-5 h-5"/></button>
+                      <button onClick={() => handleRequest(order.id, 'download')} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600" title="Download"><Download className="w-5 h-5"/></button>
+                      
+                      <div className="w-px h-6 bg-slate-200 mx-1 hidden md:block"></div>
+
+                      {/* ACTION BUTTON LOGIC */}
+                      {isReadyToPrint ? (
+                        <button onClick={() => handleUpdateStatus(order.id, 'completed')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4" /> Mark Ready
+                        </button>
+                      ) : order.status === 'completed' ? (
+                        <button onClick={() => { setSelectedOrder(order.id); setShowOtpModal(true); }} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4" /> Verify
+                        </button>
+                      ) : (
+                        <button disabled className="bg-slate-100 text-slate-400 px-4 py-2 rounded-lg text-sm font-bold cursor-not-allowed">
+                          Completed
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
