@@ -27,7 +27,6 @@ import JSZip from 'jszip'
 
 // --- Interfaces ---
 
-// 1. Define a specific type for the PDF library to avoid 'any'
 interface PDFJSModule {
   GlobalWorkerOptions: {
     workerSrc: string;
@@ -158,13 +157,9 @@ export default function PrintSettingsPage() {
   // --- Helpers: Page Counting ---
   const countPdfPages = async (buffer: ArrayBuffer): Promise<number> => {
     try {
-      // Dynamic import
       const pdfjsModule = await import('pdfjs-dist')
-      
-      // FIXED: Cast to specific interface instead of 'any'
       const pdfjsLib = pdfjsModule as unknown as PDFJSModule
 
-      // Set worker source
       if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
          pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
       }
@@ -194,19 +189,13 @@ export default function PrintSettingsPage() {
   }
 
   // --- 3. PRACTICAL BILL CALCULATION ---
-  
   const baseRate = settings.color === 'bw' ? (shopData?.bw_price || 0) : (shopData?.color_price || 0)
-  
   const totalFaces = pageCount * settings.copies
-
   const rawPrintCost = totalFaces * baseRate
-
   const isDoubleSided = settings.sides === 'double'
   const discountMultiplier = isDoubleSided ? 0.8 : 1
-  
   const finalPrintCost = Math.ceil(rawPrintCost * discountMultiplier)
   const savingsAmount = rawPrintCost - finalPrintCost
-
   const sheetsUsed = isDoubleSided ? Math.ceil(pageCount / 2) * settings.copies : pageCount * settings.copies
 
   const bindingPrice = 
@@ -216,32 +205,51 @@ export default function PrintSettingsPage() {
   
   const totalCost = finalPrintCost + bindingPrice
 
-  // --- Handler ---
+  // --- Handler (UPDATED AND FIXED) ---
   const handleContinue = async () => {
-    if (!uploadId || !shopId) return
+    if (!uploadId || !shopId) {
+      toast.error("Missing upload or shop ID")
+      return
+    }
+    
     setProcessing(true)
 
     try {
+      // DEBUG: Check what we are trying to send
+      console.log("Attempting update for:", { uploadId, shopId })
+
+      // Update upload record
+      // NOTE: Removed 'pages: pageCount' to prevent DB errors if column is missing
       const { error } = await supabase
         .from('uploads')
         .update({
           status: 'pending_payment', 
-          shop_id: shopId,
+          shop_id: shopId
         })
         .eq('id', uploadId)
 
-      if (error) throw error
+      if (error) {
+        console.error("Supabase Update Error:", error)
+        throw new Error(error.message)
+      }
 
+      // Pass all relevant data via URL to ensure consistency without relying on DB
       const params = new URLSearchParams({
         uploadId: uploadId,
         shopId: shopId,
         amount: totalCost.toString(),
-        desc: `${settings.color.toUpperCase()} Print (${settings.copies} copies)`
+        pages: pageCount.toString(), // We pass the count here safely
+        color: settings.color,
+        sides: settings.sides,
+        copies: settings.copies.toString(),
+        binding: settings.binding
       })
 
       router.push(`/payment?${params.toString()}`)
-    } catch (err) {
-      toast.error('Failed to proceed')
+    } catch (err: any) {
+      console.error("Proceed Error:", err)
+      // Show the specific error message from the database
+      toast.error(`Error: ${err.message || 'Failed to proceed'}`)
       setProcessing(false)
     }
   }
@@ -257,6 +265,17 @@ export default function PrintSettingsPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <Toaster position="top-center" richColors />
+      
+      {/* Header */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+           <button onClick={() => router.back()} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition font-medium text-sm">
+              <ArrowLeft className="w-4 h-4" /> Back
+           </button>
+           <h1 className="text-lg font-bold text-slate-900">Configure Print</h1>
+           <div className="w-16"></div>
+        </div>
+      </header>
 
       <main className="max-w-5xl mx-auto px-6 py-10">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -300,7 +319,7 @@ export default function PrintSettingsPage() {
                </div>
             </Section>
 
-            {/* 2. Sides (With Discount Badge) */}
+            {/* 2. Sides */}
             <Section title="Paper Sides" icon={<Files className="w-5 h-5 text-blue-600"/>}>
                <div className="grid grid-cols-2 gap-4">
                   <OptionButton 
@@ -319,7 +338,7 @@ export default function PrintSettingsPage() {
                        icon={<Layers className="w-8 h-8 text-slate-400" />}
                     />
                     <div className="absolute -top-3 right-4 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm animate-pulse">
-                        Cheaper!
+                       Cheaper!
                     </div>
                   </div>
                </div>
