@@ -19,7 +19,7 @@ export default function Footer() {
           </p>
           
           <div className="flex items-center gap-4">
-            <SocialLink href="https://github.com" icon={<Github className="w-4 h-4" />} />
+            <SocialLink href="https://github.com/Ghatak18005/HackForge-2.0" icon={<Github className="w-4 h-4" />} />
             <span className="text-slate-300">|</span>
             <p className="text-xs text-slate-400">
               &copy; {new Date().getFullYear()} PrintIt.
