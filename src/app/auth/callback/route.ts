@@ -15,7 +15,10 @@ export async function GET(request: NextRequest) {
 
     // Get the authenticated user
     const { data: { user } } = await supabase.auth.getUser()
-    
+    if (!user) {
+    return new Response("Unauthorized", { status: 401 });
+    }
+
     if (user) {
       // Check if user already exists in the users table
       const { data: existingUser } = await supabase
