@@ -28,7 +28,7 @@ export default function ContactPage() {
         <div className="text-center mb-16">
           <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">Contact Support</h1>
           <p className="text-lg text-slate-500 max-w-2xl mx-auto">
-            Got a question about an order? Found a bug? We are here to help BVM students 24/7.
+            Got a question about an order? Found a bug? We are here to help you 24/7.
           </p>
         </div>
 
@@ -111,7 +111,7 @@ export default function ContactPage() {
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900 mb-2">Message Sent!</h3>
                 <p className="text-slate-500 max-w-md">
-                  Thanks for reaching out, Aum. Our team has received your message and will get back to you within 2 hours.
+                  Thanks for reaching out. Our team has received your message and will get back to you within 2 hours.
                 </p>
                 <button 
                   onClick={() => setSubmitted(false)}

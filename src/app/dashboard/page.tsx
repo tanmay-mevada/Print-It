@@ -27,6 +27,7 @@ interface Shop {
   location: string
   bw_price: number
   color_price: number
+  is_open: boolean // Added is_open to interface
 }
 
 interface Order {
@@ -71,6 +72,7 @@ export default function StudentDashboard() {
         // 2. Load Data Parallelly
         const [profileRes, shopsRes, ordersRes] = await Promise.all([
            supabase.from('users').select('*').eq('id', authUser.id).single(),
+           // Make sure to select is_open from database
            supabase.from('shops').select('*').order('name'),
            supabase.from('uploads').select('id, file_name, file_size, status, created_at').eq('user_id', authUser.id).order('created_at', { ascending: false }).limit(10)
         ])
@@ -132,8 +134,10 @@ export default function StudentDashboard() {
 
       toast.success('File uploaded! Redirecting...')
       router.push(`/print-settings?uploadId=${data.uploadId}&shopId=${selectedShop.id}`)
-    } catch (err: any) {
-      toast.error(err.message || 'Upload failed')
+    } catch (err) {
+      // Safe error handling without 'any'
+      const errorMessage = err instanceof Error ? err.message : 'Upload failed'
+      toast.error(errorMessage)
     } finally {
       setUploading(false)
     }
@@ -159,19 +163,6 @@ export default function StudentDashboard() {
     <div className="min-h-screen bg-slate-50 pb-20">
       <Toaster position="top-center" richColors />
 
-      {/* --- HEADER --- */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{greeting},</span>
-            <h1 className="text-lg font-bold text-slate-900">{userProfile?.full_name || 'Student'}</h1>
-          </div>
-          <button onClick={handleLogout} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 hover:text-red-600 transition" title="Logout">
-            <LogOut className="w-5 h-5" />
-          </button>
-        </div>
-      </header>
-
       <main className="max-w-6xl mx-auto px-6 pt-8">
 
         {/* --- SECTION 1: ACTION AREA (Important Stuff) --- */}
@@ -188,20 +179,35 @@ export default function StudentDashboard() {
               {shops.map((shop) => (
                 <button
                   key={shop.id}
-                  onClick={() => setSelectedShop(shop)}
+                  onClick={() => {
+                    // Only allow selection if shop is open
+                    if (shop.is_open) setSelectedShop(shop)
+                  }}
+                  disabled={!shop.is_open}
                   className={`p-4 rounded-xl border-2 text-left transition-all relative group ${
                     selectedShop?.id === shop.id
                       ? 'border-blue-600 bg-blue-50/50 ring-1 ring-blue-600 shadow-sm'
-                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
+                      : !shop.is_open 
+                        ? 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed grayscale-[0.5]' // Disabled State
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md' // Active State
                   }`}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="font-bold text-slate-900 line-clamp-1">{shop.name}</h3>
+                    
+                    {/* Status Indicators */}
                     {selectedShop?.id === shop.id && <CheckCircle2 className="w-5 h-5 text-blue-600" />}
+                    {!shop.is_open && (
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-600 px-2 py-1 rounded-full">
+                        Closed
+                      </span>
+                    )}
                   </div>
+                  
                   <div className="flex items-center gap-1 text-sm text-slate-500 mb-3">
                     <MapPin className="w-3.5 h-3.5" /> <span className="truncate">{shop.location}</span>
                   </div>
+                  
                   <div className="flex gap-2 text-xs font-medium">
                      <span className="bg-slate-100 px-2 py-1 rounded text-slate-600">B/W: ₹{shop.bw_price}</span>
                      <span className="bg-slate-100 px-2 py-1 rounded text-slate-600">Color: ₹{shop.color_price}</span>
@@ -330,7 +336,8 @@ export default function StudentDashboard() {
 
 // --- Subcomponents ---
 
-function InfoRow({ icon, label, value }: { icon: any, label: string, value: string }) {
+// FIXED: Replaced 'any' with 'React.ReactNode'
+function InfoRow({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
    return (
       <div className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
          <div className="flex items-center gap-2 text-slate-500 text-sm">
@@ -348,6 +355,7 @@ function StatusBadge({ status }: { status: string }) {
       printing: 'bg-blue-100 text-blue-700',
       default: 'bg-slate-100 text-slate-600'
    }
+   // Type assertion to ensure status is a valid key
    const style = styles[status as keyof typeof styles] || styles.default
    
    return (

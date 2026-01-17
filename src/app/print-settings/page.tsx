@@ -257,17 +257,6 @@ export default function PrintSettingsPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <Toaster position="top-center" richColors />
-      
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-           <button onClick={() => router.back()} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition font-medium text-sm">
-              <ArrowLeft className="w-4 h-4" /> Back
-           </button>
-           <h1 className="text-lg font-bold text-slate-900">Configure Print</h1>
-           <div className="w-16"></div>
-        </div>
-      </header>
 
       <main className="max-w-5xl mx-auto px-6 py-10">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
